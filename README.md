@@ -1,6 +1,6 @@
-# XDP Least-Connections Load Balancer
+# XDP Weighted Least-Connections Load Balancer
 
-A NAT-based TCP load balancer implemented in eBPF at the XDP layer. Distributes incoming connections across backend servers using the **least-connections** scheduling algorithm, with backends manageable at runtime via an interactive CLI.
+A NAT-based TCP load balancer implemented in eBPF at the XDP layer. Supports two scheduling algorithms — **Least Connections (LC)** and **Weighted Least Connections (WLC)** — each available in two connection-tracking modes. Backends are manageable at runtime via an interactive CLI.
 
 > **Why XDP?** Packets are processed before entering the Linux networking stack — minimal CPU overhead, maximum throughput.
 
@@ -9,6 +9,7 @@ A NAT-based TCP load balancer implemented in eBPF at the XDP layer. Distributes 
 ## Table of Contents
 
 - [Overview](#overview)
+- [Scheduling Algorithms](#scheduling-algorithms)
 - [Connection Tracking Modes](#connection-tracking-modes)
 - [Repository Structure](#repository-structure)
 - [Prerequisites](#prerequisites)
@@ -24,18 +25,27 @@ A NAT-based TCP load balancer implemented in eBPF at the XDP layer. Distributes 
 
 ## Overview
 
-Each incoming TCP connection is assigned to the backend with the fewest active connections. The XDP eBPF program tracks connection state by inspecting TCP flags and maintaining lightweight per-connection structures in eBPF maps. Because everything runs at the XDP layer, packets are intercepted on arrival — before the kernel's normal network stack — keeping overhead very low.
+Each incoming TCP connection is assigned to a backend according to the active scheduling algorithm. The XDP eBPF program tracks connection state by inspecting TCP flags and maintaining lightweight per-connection structures in eBPF maps. Because everything runs at the XDP layer, packets are intercepted on arrival — before the kernel's normal network stack — keeping overhead very low.
+
+---
+
+## Scheduling Algorithms
+
+| Algorithm | Description |
+|-----------|-------------|
+| **Least Connections (LC)** | Assigns each new connection to the backend with the fewest active connections. All backends are treated equally. |
+| **Weighted Least Connections (WLC)** | Assigns connections based on `active_connections / weight`. Backends with higher weights receive a proportionally larger share of traffic. |
 
 ---
 
 ## Connection Tracking Modes
 
-Two builds are provided, differing only in *when* a connection is counted:
+Both algorithms are available in two builds, differing only in *when* a connection is counted:
 
 | Mode | Counts on | Pros | Cons |
 |------|-----------|------|------|
-| **Established** | First non-SYN packet (after handshake completes) | Counters reflect only fully established connections | Under burst load, multiple SYNs may see stale counters before they update |
 | **SYN** | SYN packet arrival | Reserves backend immediately; more even distribution during bursts | Incomplete handshakes are briefly counted until cleaned up |
+| **Established** | First non-SYN packet (after handshake completes) | Counters reflect only fully established connections | Under burst load, multiple SYNs may see stale counters before they update |
 
 ---
 
@@ -43,10 +53,13 @@ Two builds are provided, differing only in *when* a connection is counted:
 
 ```
 .
-├── bpf/            # eBPF/XDP load balancer program (C)
-├── cmd/lb/         # Go user-space loader and CLI
-├── configs/        # Backend configuration file
-└── scripts/        # Utility scripts
+├── bpf/                  # eBPF/XDP load balancer program (C)
+├── cmd/lb/               # Go user-space loader and CLI
+├── configs/
+│   ├── backends_lc.json  # Backend config for LC (no weights)
+│   └── backends_wlc.json # Backend config for WLC (with weights)
+└── scripts/
+    └── build.sh          # Builds all four binaries
 ```
 
 ---
@@ -65,7 +78,7 @@ sudo ./scripts/llvm.sh
 
 ## Configuration
 
-Initial backends are defined in `configs/backends.json`:
+### LC — `configs/backends_lc.json`
 
 ```json
 {
@@ -76,41 +89,57 @@ Initial backends are defined in `configs/backends.json`:
 }
 ```
 
-Edit this file before starting, or manage backends live via the CLI (see below).
+### WLC — `configs/backends_wlc.json`
+
+```json
+{
+  "backends": [
+    { "ip": "10.0.0.2", "weight": 1 },
+    { "ip": "10.0.0.3", "weight": 3 }
+  ]
+}
+```
+
+Backends can also be added, removed, or reweighted live via the CLI after startup.
 
 ---
 
 ## Building
 
-Both binaries are built from the same source using build tags.
-
-**Established-connections version:**
+Build all four binaries at once:
 
 ```bash
-go generate -tags established ./cmd/lb
-go build -tags established -o lb_established ./cmd/lb
+./build.sh
 ```
 
-**SYN-connections version:**
+This produces:
 
-```bash
-go generate -tags syn ./cmd/lb
-go build -tags syn -o lb_syn ./cmd/lb
-```
+| Binary | Algorithm | Tracking mode |
+|--------|-----------|---------------|
+| `lb_lc_syn` | Least Connections | SYN |
+| `lb_lc_est` | Least Connections | Established |
+| `lb_wlc_syn` | Weighted Least Connections | SYN |
+| `lb_wlc_est` | Weighted Least Connections | Established |
 
 ---
 
 ## Running
 
-```bash
-# Established-connections version
-sudo ./lb_established -i <network-interface> -config configs/backends.json
+**LC binaries:**
 
-# SYN-connections version
-sudo ./lb_syn -i <network-interface> -config configs/backends.json
+```bash
+sudo ./lb_lc_syn -i <network-interface> -config configs/backends_lc.json
+sudo ./lb_lc_est -i <network-interface> -config configs/backends_lc.json
 ```
 
-Replace `<network-interface>` with the interface you want to attach the XDP program to (e.g. `eth0`).
+**WLC binaries:**
+
+```bash
+sudo ./lb_wlc_syn -i <network-interface> -config configs/backends_wlc.json
+sudo ./lb_wlc_est -i <network-interface> -config configs/backends_wlc.json
+```
+
+Replace `<network-interface>` with the interface to attach the XDP program to (e.g. `eth0`).
 
 ---
 
@@ -122,23 +151,35 @@ After starting, an interactive prompt becomes available:
 lb>
 ```
 
+### LC commands
+
 | Command | Description |
 |---------|-------------|
 | `add <ip>` | Add a backend server |
 | `del <ip>` | Remove a backend server |
 | `list` | List backends and their current connection counts |
 
-**Example session:**
+### WLC commands
+
+| Command | Description |
+|---------|-------------|
+| `add <ip> <weight>` | Add a backend server with a given weight |
+| `del <ip>` | Remove a backend server |
+| `update <ip> <weight>` | Update the weight of an existing backend |
+| `list` | List backends with their weights and connection counts |
+
+**Example session (WLC):**
 
 ```
-lb> add 10.0.0.4
+lb> add 10.0.0.4 2
+lb> update 10.0.0.2 3
 lb> del 10.0.0.3
 lb> list
 ```
 
 ---
 
-### Verifying the XDP Program is Attached
+### Verifying the XDP program is attached
 
 ```bash
 sudo bpftool prog show
@@ -176,21 +217,17 @@ seq 100 | xargs -n1 -P100 -I{} curl -s --http1.1 http://<load-balancer-ip>:8000 
 
 ### 4. Check active kernel TCP connections
 
-While the test is running:
-
 ```bash
 ss -tan '( sport = :8000 )' | wc -l
 ```
 
 ### 5. Observe backend distribution
 
-Inside the load balancer CLI:
-
 ```
 lb> list
 ```
 
-This prints the connection count per backend in real time. Under burst load you may notice the **established** version distributes less evenly than the **SYN** version, because SYN-counting reserves backends at handshake start.
+Under burst load, the **SYN** variants distribute more evenly than the **established** variants because counters are incremented immediately on SYN arrival. With WLC, backends with higher weights should absorb a proportionally larger share of connections.
 
 ---
 
