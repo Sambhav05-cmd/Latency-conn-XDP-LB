@@ -204,13 +204,14 @@ sudo bpftool prog show
 ---
 
 ## Testing
+To test the connection tracking the connections should persist for some time, you can either try large downloads which take time, or use the socat tool which keeps connections alive without sending alot of data
 
 ### 1. Start backend servers
 
 Run this on each backend machine:
 
 ```bash
-python3 -m http.server 8000
+socat TCP-LISTEN:8000,reuseaddr,fork EXEC:/bin/cat
 ```
 
 ### 2. Send a single request
@@ -218,17 +219,17 @@ python3 -m http.server 8000
 From a client machine:
 
 ```bash
-curl -v --http1.1 http://<load-balancer-ip>:8000
+socat - TCP:<load_balancer_ip>:8000
 ```
-
-> Using `--http1.1` keeps the connection open briefly, making it easier to observe connection counters.
 
 ### 3. Simulate high concurrency
 
 Launch 100 parallel requests simultaneously:
 
 ```bash
-seq 100 | xargs -n1 -P100 -I{} curl -s --http1.1 http://<load-balancer-ip>:8000 > /dev/null
+for i in $(seq 1 20); do
+socat - TCP:<load_balancer_ip>:8000 &
+done
 ```
 
 ### 4. Check active kernel TCP connections
