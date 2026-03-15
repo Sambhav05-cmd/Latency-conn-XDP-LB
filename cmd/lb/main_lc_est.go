@@ -43,6 +43,10 @@ func parseIPv4(s string) (uint32, error) {
 	return binary.LittleEndian.Uint32(ip), nil
 }
 
+func htons(port uint16) uint16 {
+	return (port << 8) | (port >> 8)
+}
+
 func addBackend(objs *lbObjects, ip string, port uint16) {
 
 	backIP, err := parseIPv4(ip)
@@ -63,7 +67,7 @@ func addBackend(objs *lbObjects, ip string, port uint16) {
 	for i := uint32(0); i < count; i++ {
 		var b lbBackend
 		err := objs.lbMaps.Backends.Lookup(i, &b)
-		if err == nil && b.Ip == backIP && b.Port == port {
+		if err == nil && b.Ip == backIP && b.Port == htons(port) {
 			log.Println("backend already exists:", ip, port)
 			return
 		}
@@ -71,7 +75,7 @@ func addBackend(objs *lbObjects, ip string, port uint16) {
 
 	backEp := lbBackend{
 		Ip:    backIP,
-		Port:  port,
+		Port:  htons(port),
 		Conns: 0,
 	}
 
@@ -116,7 +120,7 @@ func deleteBackend(objs *lbObjects, ip string, port uint16) {
 			continue
 		}
 
-		if b.Ip == backIP && b.Port == port {
+		if b.Ip == backIP && b.Port == htons(port) {
 
 			if b.Conns != 0 {
 				log.Println("cannot delete backend, active connections:", b.Conns)
@@ -168,7 +172,7 @@ func listBackends(objs *lbObjects) {
 		ip := make(net.IP, 4)
 		binary.LittleEndian.PutUint32(ip, b.Ip)
 
-		fmt.Println(i, ip, "port:", b.Port, "conns:", b.Conns)
+		fmt.Println(i, ip, "port:", htons(b.Port), "conns:", b.Conns)
 	}
 }
 
@@ -217,7 +221,7 @@ func main() {
 
 		backEp := lbBackend{
 			Ip:    backIP,
-			Port:  backend.Port,
+			Port:  htons(backend.Port),
 			Conns: 0,
 		}
 
