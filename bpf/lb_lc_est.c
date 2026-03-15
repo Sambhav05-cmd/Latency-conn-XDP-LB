@@ -301,8 +301,8 @@ int xdp_load_balancer(struct xdp_md *ctx)
                                                tcp->source); // LB port
       bpf_map_delete_elem(&backendtrack, &bt_key);
 
-      /*bpf_printk("connection deleted (backend path). Backend %pI4 conns=%d",
-                 &b->ip, nb.conns);*/
+      bpf_printk("connection deleted (backend path). Backend %pI4 conns=%d",
+                 &b->ip, nb.conns);
     }
 
     // FIB lookup: send reply toward the client

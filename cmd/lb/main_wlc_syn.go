@@ -27,7 +27,7 @@ var ifname string
 type BackendConfig struct {
 	IP     string `json:"ip"`
 	Port   uint16 `json:"port"`
-	Weight uint32 `json:"weight"`
+	weight uint16 `json:"weight"`
 }
 
 type Config struct {
@@ -42,7 +42,7 @@ func parseIPv4(s string) (uint32, error) {
 	return binary.LittleEndian.Uint32(ip), nil
 }
 
-func addBackend(objs *lb4Objects, ip string, port uint16, weight uint32) {
+func addBackend(objs *lb4Objects, ip string, port uint16, weight uint16) {
 
 	backIP, err := parseIPv4(ip)
 	if err != nil {
@@ -129,7 +129,7 @@ func deleteBackend(objs *lb4Objects, ip string, port uint16) {
 	log.Println("backend not found:", ip, port)
 }
 
-func updateBackend(objs *lb4Objects, ip string, port uint16, weight uint32) {
+func updateBackend(objs *lb4Objects, ip string, port uint16, weight uint16) {
 
 	backIP, err := parseIPv4(ip)
 	if err != nil {
@@ -215,7 +215,7 @@ func main() {
 			Ip:     ip,
 			Port:   be.Port,
 			Conns:  0,
-			Weight: be.Weight,
+			Weight: be.weight,
 		}
 
 		objs.lb4Maps.Backends.Put(uint32(i), &backEp)
@@ -250,7 +250,7 @@ func main() {
 			case "add":
 				p, _ := strconv.Atoi(parts[2])
 				w, _ := strconv.Atoi(parts[3])
-				addBackend(&objs, parts[1], uint16(p), uint32(w))
+				addBackend(&objs, parts[1], uint16(p), uint16(w))
 
 			case "del":
 				p, _ := strconv.Atoi(parts[2])
@@ -259,7 +259,7 @@ func main() {
 			case "update":
 				p, _ := strconv.Atoi(parts[2])
 				w, _ := strconv.Atoi(parts[3])
-				updateBackend(&objs, parts[1], uint16(p), uint32(w))
+				updateBackend(&objs, parts[1], uint16(p), uint16(w))
 
 			case "list":
 				listBackends(&objs)
