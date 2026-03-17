@@ -448,7 +448,7 @@ int xdp_load_balancer(struct xdp_md *ctx)
       // Increment connection counter for the backend
       struct backend nb = *b;
       nb.conns += 1;
-      bpf_map_update_elem(&backends, &ct->backend_idx, &nb, BPF_ANY);
+      bpf_map_update_elem(&backends, &key, &nb, BPF_ANY);
 
       // find available port for translation and insert into port_ownership map
       for (__u16 p = 1024; p < MAX_PORTS; p++)
