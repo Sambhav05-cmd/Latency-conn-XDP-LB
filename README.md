@@ -17,7 +17,7 @@ Traffic is steered only for configured services, allowing unrelated network flow
 
 - [Overview](#overview)
 - [Key capabilities](#Key-capabilities)
-- [Why least connections instead of hashing](#Why-least-connections-instead-of-hashing)
+- [Why least connections instead of hashing](#Why-Least-Connections-instead-of-Hash-Based-Load-Balancing)
 - [Suitable Deployment Scenarios](#Suitable-Deployment-Scenarios)
 - [Scheduling Algorithms](#scheduling-algorithms)
 - [Connection Tracking Modes](#connection-tracking-modes)
@@ -67,7 +67,7 @@ The design is suitable for practical high-concurrency environments where statele
 
 ---
 
-## Why Least-Connections instead of Hash-Based Load Balancing
+## Why Least-Connections instead of Hash Based Load Balancing
 
 High-performance L4 load balancers in fast datapaths (including most XDP-based designs) commonly rely on **stateless flow hashing** (e.g., 5-tuple hashing) for backend selection.  
 Hashing offers constant-time scheduling decisions and minimal per-packet overhead, making it attractive for high-throughput environments.
