@@ -310,15 +310,17 @@ Under burst load, the **SYN** variants distribute more evenly than the **establi
 
 ## Customization
 
-The load balancer currently filters on **TCP port 8000**. To change this, edit the port filter in the eBPF programs:
-
-```
-bpf/lb_lc_syn.c
-bpf/lb_lc_est.c
-bpf/lb_wlc_syn.c
-bpf/lb_wlc_est.c
+The load balancer currently handles a maximum of 60000 simultaneous connections. To change this, you can modify the maximum connections and the maximum port to be 1024+maximum connections
+in the bpf program , change the following constants to your desired values:
+```c
+#define MAX_CONNECTIONS 60000
+#define MAX_PORT 61024
 ```
 
+and in the corresponding main go file:
+```go
+const maxPort = 61024
+```
 ---
 
 ## References
