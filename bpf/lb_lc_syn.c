@@ -470,6 +470,11 @@ int xdp_load_balancer(struct xdp_md *ctx)
         return XDP_ABORTED;
       }
 
+      // Increment connection counter for the backend
+      struct backend nb = *b;
+      nb.conns += 1;
+      bpf_map_update_elem(&backends, &key, &nb, BPF_ANY);
+
       bpf_printk("New connection: Client %pI4:%d -> Backend %pI4",
                  &ip->saddr, bpf_ntohs(tcp->source), &b->ip);
     }

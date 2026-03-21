@@ -1,4 +1,5 @@
-*.o
+/bin
+*.out
 lb_lc_*
 lb_lwc_*
 lb_wlc_*
